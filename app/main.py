@@ -33,6 +33,8 @@ async def api_process(
     iso_overlap: float = Form(0.3),
     strategy: str = Form("contour"),           # contour | voronoi | rubout
     copper_margin: float = Form(0.0),
+    spot_drills: bool = Form(False),
+    spot_depth: float = Form(0.1),
     drill_depth: float = Form(2.0),
     cutout_tool_dia: float = Form(1.0),
     board_thickness: float = Form(1.6),
@@ -67,6 +69,7 @@ async def api_process(
             vbit_tip=vbit_tip,
             iso_depth=iso_depth, iso_passes=iso_passes, iso_overlap=iso_overlap,
             strategy=strategy, copper_margin=copper_margin,
+            spot_drills=spot_drills, spot_depth=spot_depth,
             drill_depth=drill_depth,
             cutout_tool_dia=cutout_tool_dia, board_thickness=board_thickness,
             cutout_pass_depth=cutout_pass_depth,

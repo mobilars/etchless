@@ -278,10 +278,17 @@ def _footer(p: GcodeParams):
     return [f"G0 Z{_fmt(p.safe_z)}", "M5", "G0 X0 Y0", "M2", ""]
 
 
-def gcode_isolation(paths, depth: float, p: GcodeParams) -> str:
+def gcode_isolation(paths, depth: float, p: GcodeParams,
+                    spots=None, spot_depth: float = 0.1) -> str:
     lines = _header(p, f"isolation milling, depth {depth} mm")
     for path in order_nearest(paths, lambda ls: ls.coords[0]):
         _emit_path(lines, path, -abs(depth), p)
+    if spots:
+        lines.append(f"(spot drilling {len(spots)} hole centers, depth {spot_depth} mm)")
+        for x, y in order_nearest(spots, lambda pt: pt):
+            lines.append(f"G0 X{_fmt(x)} Y{_fmt(y)}")
+            lines.append(f"G1 Z{_fmt(-abs(spot_depth))} F{_fmt(p.feed_z)}")
+            lines.append(f"G0 Z{_fmt(p.safe_z)}")
     lines += _footer(p)
     return "\n".join(lines)
 
@@ -355,6 +362,7 @@ def process_job(copper_path=None, drill_path=None, outline_path=None, *,
                 tool_dia=None, vbit_angle=None, vbit_tip=0.1,
                 iso_depth=0.05, iso_passes=1, iso_overlap=0.3,
                 strategy="contour", copper_margin=0.0,
+                spot_drills=False, spot_depth=0.1,
                 drill_depth=2.0,
                 cutout_tool_dia=1.0, board_thickness=1.6, cutout_pass_depth=0.6,
                 cutout_overshoot=0.1, tab_count=4, tab_width=2.0,
@@ -428,7 +436,11 @@ def process_job(copper_path=None, drill_path=None, outline_path=None, *,
             iso_paths, warns = isolation_toolpaths(work, tool_dia, iso_passes, iso_overlap)
         res.warnings += warns
         res.stats["strategy"] = strategy
-        res.gcode["isolation"] = gcode_isolation(iso_paths, iso_depth, p)
+        spots = [(x, y) for x, y, _ in drills] if (spot_drills and drills) else None
+        if spots:
+            res.stats["spotted_holes"] = len(spots)
+        res.gcode["isolation"] = gcode_isolation(iso_paths, iso_depth, p,
+                                                 spots=spots, spot_depth=spot_depth)
         res.isolation = _line_preview(iso_paths)
         res.stats["isolation_paths"] = len(iso_paths)
         res.stats["isolation_length_mm"] = round(sum(l.length for l in iso_paths), 1)

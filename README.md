@@ -46,6 +46,9 @@ discarded.
   midline is so tight the tool nibbles both neighbors.
 - Drilling: holes grouped per diameter, nearest-neighbor ordered, `M0` tool-change
   pause between sizes.
+- Optional drill spotting: while the isolation tool is still in the spindle, a
+  small divot (configurable depth, default 0.1 mm) is milled at every hole center
+  so the drill bit doesn't wander on bare copper.
 - Board cutout from the edge-cuts layer: multi-depth passes, holding tabs on the
   final pass.
 - Mirror option for bottom-side milling; origin moved to board lower-left.

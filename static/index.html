@@ -74,6 +74,9 @@
 
   <fieldset><legend>Drilling</legend>
     <label><span>Drill depth (mm)</span><input type="number" id="drill_depth" value="2.0" step="0.1"></label>
+    <label><span>Spot holes during isolation</span><input type="checkbox" id="spot_drills"
+      title="While the isolation tool is in the spindle, poke a small divot at every hole center so the drill bit does not wander on the copper"></label>
+    <label><span>Spot depth (mm)</span><input type="number" id="spot_depth" value="0.1" step="0.05" min="0.02"></label>
   </fieldset>
 
   <fieldset><legend>Board cutout</legend>
@@ -244,12 +247,13 @@ $('go').onclick = async () => {
     if ($(input).files[0]) fd.append(field, $(input).files[0]);
   }
   for (const id of ['tool_mode','tool_dia','vbit_angle','vbit_tip','iso_depth','iso_passes','iso_overlap',
-                    'strategy','copper_margin',
+                    'strategy','copper_margin','spot_depth',
                     'drill_depth','cutout_tool_dia','board_thickness','cutout_pass_depth','tab_count',
                     'tab_width','safe_z','feed_xy','feed_z','rpm','max_segment']) {
     fd.append(id, $(id).value);
   }
   fd.append('mirror', $('mirror').checked);
+  fd.append('spot_drills', $('spot_drills').checked);
   $('go').disabled = true;
   $('error').textContent = ''; $('warnings').textContent = '';
   try {
