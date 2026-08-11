@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: etchless
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: etchless
+  namespace: etchless
+  labels:
+    app: etchless
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: etchless
+  template:
+    metadata:
+      labels:
+        app: etchless
+    spec:
+      containers:
+        - name: etchless
+          image: registry.unisoft.no/library/etchless:0.1.0
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 2
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: etchless
+  namespace: etchless
+spec:
+  selector:
+    app: etchless
+  ports:
+    - port: 80
+      targetPort: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: etchless
+  namespace: etchless
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: 20m
+spec:
+  ingressClassName: public
+  rules:
+    - host: etchless.apps.apus.no
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: etchless
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - etchless.apps.apus.no
+      secretName: etchless-tls
