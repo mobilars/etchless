@@ -80,6 +80,18 @@
     <span>Board outline (Gerber)</span><input type="file" id="f_outline">
   </fieldset>
 
+  <fieldset><legend>Presets</legend>
+    <label><span>Load preset</span>
+      <select id="preset_sel" style="width:140px"><option value="">-</option></select>
+    </label>
+    <div style="display:flex;gap:6px;margin-top:4px">
+      <input type="text" id="preset_name" placeholder="preset name"
+        style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:4px 6px">
+      <button class="mbtn" id="preset_save">Save</button>
+      <button class="mbtn" id="preset_del">Delete</button>
+    </div>
+  </fieldset>
+
   <fieldset><legend>Isolation tool</legend>
     <label><span>Tool type</span>
       <select id="tool_mode"><option value="endmill">End mill</option><option value="vbit">V-bit</option></select>
@@ -224,6 +236,65 @@ const $ = id => document.getElementById(id);
 const svg = $('svg'), world = $('world');
 let vb = null;
 
+// ---------------- presets (localStorage) ----------------
+const PRESET_FIELDS = ['tool_mode','tool_dia','vbit_angle','vbit_tip','iso_depth','strategy',
+  'copper_margin','iso_passes','iso_overlap','drill_depth','spot_drills','spot_depth',
+  'cutout_tool_dia','board_thickness','cutout_pass_depth','tab_count','tab_width','mirror',
+  'safe_z','feed_xy','feed_z','rpm','max_segment','probe_spacing','probe_depth','probe_feed'];
+const PRESET_KEY = 'etchless.presets', LAST_KEY = 'etchless.last';
+
+function collectParams() {
+  const o = {};
+  for (const id of PRESET_FIELDS) {
+    const el = $(id);
+    o[id] = el.type === 'checkbox' ? el.checked : el.value;
+  }
+  return o;
+}
+function applyParams(o) {
+  for (const id of PRESET_FIELDS) {
+    if (!(id in o)) continue;
+    const el = $(id);
+    if (el.type === 'checkbox') el.checked = !!o[id]; else el.value = o[id];
+  }
+  $('tool_mode').onchange();
+}
+const loadPresets = () => { try { return JSON.parse(localStorage.getItem(PRESET_KEY)) || {}; } catch { return {}; } };
+function refreshPresetList(selected) {
+  const sel = $('preset_sel');
+  sel.innerHTML = '<option value="">-</option>';
+  for (const name of Object.keys(loadPresets()).sort()) {
+    const opt = document.createElement('option');
+    opt.value = opt.textContent = name;
+    if (name === selected) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+$('preset_save').onclick = () => {
+  const name = $('preset_name').value.trim() || $('preset_sel').value;
+  if (!name) { $('error').textContent = 'Give the preset a name first.'; return; }
+  const all = loadPresets();
+  all[name] = collectParams();
+  localStorage.setItem(PRESET_KEY, JSON.stringify(all));
+  refreshPresetList(name);
+  $('preset_name').value = '';
+  $('error').textContent = '';
+};
+$('preset_del').onclick = () => {
+  const name = $('preset_sel').value;
+  if (!name) return;
+  const all = loadPresets();
+  delete all[name];
+  localStorage.setItem(PRESET_KEY, JSON.stringify(all));
+  refreshPresetList();
+};
+$('preset_sel').onchange = () => {
+  const p = loadPresets()[$('preset_sel').value];
+  if (p) applyParams(p);
+};
+refreshPresetList();
+try { const last = JSON.parse(localStorage.getItem(LAST_KEY)); if (last) applyParams(last); } catch {}
+
 // hover help for every parameter
 const HELP = {
   f_copper: "Gerber of the copper layer to mill (KiCad: *-F_Cu.gbr, or *-B_Cu.gbr with Mirror on). Required for isolation milling.",
@@ -258,6 +329,8 @@ const HELP = {
   runfile: "Which generated G-code file to stream to the machine.",
   use_leveling: "Warp every cutting Z by the probed surface map, so the cut depth stays constant across an uneven board. Requires probing first.",
   jogstep: "Distance per jog button press, in mm.",
+  preset_sel: "Apply a saved parameter set. Presets live in this browser's local storage.",
+  preset_name: "Name for saving the current parameters as a preset. With the name empty, Save overwrites the selected preset.",
 };
 for (const [id, txt] of Object.entries(HELP)) {
   const el = $(id);
@@ -455,6 +528,7 @@ $('sample').onclick = async () => {
 };
 
 $('go').onclick = async () => {
+  localStorage.setItem(LAST_KEY, JSON.stringify(collectParams()));
   const fd = new FormData();
   for (const [field, input] of [['copper','f_copper'],['drill','f_drill'],['outline','f_outline']]) {
     if ($(input).files[0]) fd.append(field, $(input).files[0]);
