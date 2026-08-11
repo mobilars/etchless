@@ -1,0 +1,49 @@
+when:
+  - event: [push, pull_request, manual]
+
+steps:
+  smoke-test:
+    image: python:3.13-slim
+    commands:
+      - pip install --quiet -r requirements.txt
+      - python -c "from app.pipeline import process_job; r = process_job(copper_path='sample/test-F_Cu.gbr', drill_path='sample/test.drl', outline_path='sample/test-Edge_Cuts.gbr', tool_dia=0.2, strategy='voronoi'); assert set(r.gcode) == {'isolation', 'drill', 'outline'} and r.stats['drill_count'] == 3, r.stats; print('smoke ok:', r.stats)"
+
+  publish-image:
+    image: gcr.io/kaniko-project/executor:v1.23.2-debug
+    commands:
+      - >-
+        /kaniko/executor
+        --context="$CI_WORKSPACE"
+        --dockerfile="$CI_WORKSPACE/Dockerfile"
+        --destination="registry.container-registry.svc.cluster.local:5000/etchless:$CI_COMMIT_SHA"
+        --destination="registry.container-registry.svc.cluster.local:5000/etchless:latest"
+        --insecure
+        --skip-tls-verify
+    when:
+      - event: [push, manual]
+        branch: main
+
+  deploy:
+    image: alpine/k8s:1.33.13
+    commands:
+      - kubectl -n etchless set image deployment/etchless etchless=localhost:32000/etchless:$CI_COMMIT_SHA
+      - kubectl -n etchless rollout status deployment/etchless --timeout=120s
+    when:
+      - event: [push, manual]
+        branch: main
+
+  notify-email:
+    image: drillster/drone-email
+    settings:
+      host: smtp-relay.brevo.com
+      port: 587
+      username: ae59ac001@smtp-brevo.com
+      password:
+        from_secret: brevo_smtp_key
+      from: lars@roland.bz
+      recipients:
+        - lars@roland.bz
+      recipients_only: true
+      subject: '[${CI_PIPELINE_STATUS}] ${CI_REPO} build #${CI_PIPELINE_NUMBER}'
+    when:
+      - status: [failure]

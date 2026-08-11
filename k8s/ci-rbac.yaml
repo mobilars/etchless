@@ -1,0 +1,26 @@
+# Lets Woodpecker CI step pods (namespace `woodpecker`, default service account)
+# update the etchless Deployment image and watch the rollout - nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ci-deployer
+  namespace: etchless
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["etchless"]
+    verbs: ["get", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ci-deployer
+  namespace: etchless
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: woodpecker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ci-deployer

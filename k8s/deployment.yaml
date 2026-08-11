@@ -78,7 +78,18 @@ spec:
                 name: etchless
                 port:
                   number: 80
+    - host: etchless.apus.no
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: etchless
+                port:
+                  number: 80
   tls:
     - hosts:
         - etchless.apps.apus.no
+        - etchless.apus.no
       secretName: etchless-tls
