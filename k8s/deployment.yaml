@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: etchless
-          image: registry.unisoft.no/library/etchless:0.1.0
+          image: localhost:32000/etchless:0.1.0
           ports:
             - containerPort: 8000
           resources:
