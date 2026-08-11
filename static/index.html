@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -27,6 +27,9 @@
   button { width:100%; padding:9px; border:0; border-radius:7px; background:var(--accent);
            color:#14161a; font-weight:600; font-size:14px; cursor:pointer; }
   button:disabled { opacity:.5; cursor:wait; }
+  .mbtn, .jog { width:auto; padding:5px 10px; background:transparent; color:var(--text);
+    border:1px solid var(--line); border-radius:6px; font-weight:500; font-size:13px; }
+  .mbtn:hover, .jog:hover { border-color:var(--accent); }
   .dl { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
   .dl a { flex:1; text-align:center; padding:7px 4px; border:1px solid var(--line); border-radius:6px;
           color:var(--text); text-decoration:none; font-size:13px; }
@@ -110,7 +113,7 @@
     <label><span>Tab width (mm)</span><input type="number" id="tab_width" value="2.0" step="0.5"></label>
   </fieldset>
 
-  <fieldset><legend>Machine</legend>
+  <fieldset><legend>G-code</legend>
     <label><span>Mirror (bottom side)</span><input type="checkbox" id="mirror"></label>
     <label><span>Safe Z (mm)</span><input type="number" id="safe_z" value="2" step="0.5"></label>
     <label><span>Feed XY (mm/min)</span><input type="number" id="feed_xy" value="120" step="10"></label>
@@ -118,6 +121,53 @@
     <label><span>Spindle RPM</span><input type="number" id="rpm" value="10000" step="1000"></label>
     <label><span>Max segment (mm)</span><input type="number" id="max_segment" value="1" step="0.5"
       title="Long moves are split into segments no longer than this, so autoleveling in your sender can warp Z"></label>
+  </fieldset>
+
+  <fieldset><legend>GRBL machine</legend>
+    <button id="connect" style="background:transparent;color:var(--text);border:1px solid var(--line)">Connect (Web Serial)</button>
+    <div id="mstatus" style="color:var(--dim);font-size:12.5px;margin:8px 0 4px">not connected</div>
+    <div id="jogpad" style="display:none">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin:6px 0">
+        <span></span><button class="jog" data-j="Y" data-s="1">Y+</button><span></span>
+        <button class="jog" data-j="Z" data-s="1">Z+</button>
+        <select id="jogstep" style="background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px">
+          <option>0.1</option><option selected>1</option><option>10</option>
+        </select>
+        <button class="jog" data-j="X" data-s="-1">X-</button>
+        <button class="jog" data-j="Y" data-s="-1">Y-</button>
+        <button class="jog" data-j="X" data-s="1">X+</button>
+        <button class="jog" data-j="Z" data-s="-1">Z-</button><span></span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="mbtn" id="munlock">Unlock</button>
+        <button class="mbtn" id="mhome">Home</button>
+        <button class="mbtn" id="mzeroxy">Zero XY</button>
+        <button class="mbtn" id="mzeroz">Zero Z</button>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset id="levelbox" style="display:none"><legend>Auto-level</legend>
+    <label><span>Grid spacing (mm)</span><input type="number" id="probe_spacing" value="7.5" step="0.5" min="2"></label>
+    <label><span>Max probe depth (mm)</span><input type="number" id="probe_depth" value="2" step="0.5"></label>
+    <label><span>Probe feed (mm/min)</span><input type="number" id="probe_feed" value="30" step="5"></label>
+    <button id="probe" class="mbtn" style="width:100%">Probe isolation area</button>
+    <div id="probestatus" style="color:var(--dim);font-size:12.5px;margin-top:6px">
+      Zero Z on the copper first (probe wire on the bit, clip on the board).</div>
+  </fieldset>
+
+  <fieldset id="runbox" style="display:none"><legend>Run job</legend>
+    <label><span>File</span>
+      <select id="runfile" style="width:140px"></select>
+    </label>
+    <label><span>Apply leveling</span><input type="checkbox" id="use_leveling" checked></label>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <button class="mbtn" id="mrun" style="flex:2">Run</button>
+      <button class="mbtn" id="mhold" style="flex:1">Hold</button>
+      <button class="mbtn" id="mresume" style="flex:1">Resume</button>
+      <button class="mbtn" id="mstop" style="flex:1;color:#ff6b6b;border-color:#ff6b6b">STOP</button>
+    </div>
+    <div id="runstatus" style="color:var(--dim);font-size:12.5px;margin-top:6px"></div>
   </fieldset>
 
   <button id="go">Generate toolpaths</button>
@@ -165,12 +215,88 @@
   </div>
 </div>
 
+<script src="machine.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const svg = $('svg'), world = $('world');
 let vb = null;
 
 $('aboutLink').onclick = e => { e.preventDefault(); $('aboutBox').showModal(); };
+
+// ---------------- GRBL machine ----------------
+function refreshMachineUI() {
+  const c = Machine.connected;
+  $('jogpad').style.display = c ? 'block' : 'none';
+  $('levelbox').style.display = (c && lastResult) ? 'block' : 'none';
+  $('runbox').style.display = (c && lastResult) ? 'block' : 'none';
+  $('connect').textContent = c ? 'Disconnect' : 'Connect (Web Serial)';
+}
+
+if (!('serial' in navigator)) {
+  $('connect').disabled = true;
+  $('mstatus').textContent = 'Web Serial not available - use Chrome/Edge over HTTPS or localhost.';
+}
+
+$('connect').onclick = async () => {
+  try {
+    if (Machine.connected) { await Machine.disconnect(); }
+    else { await Machine.connect(); }
+  } catch (e) { $('mstatus').textContent = String(e.message || e); }
+  refreshMachineUI();
+};
+
+Machine.on('status', s => {
+  $('mstatus').textContent =
+    `${s.state}  X${s.wpos[0].toFixed(2)} Y${s.wpos[1].toFixed(2)} Z${s.wpos[2].toFixed(3)}`;
+});
+
+document.querySelectorAll('.jog').forEach(b => b.onclick = () => {
+  const step = parseFloat($('jogstep').value) * parseInt(b.dataset.s);
+  const feed = b.dataset.j === 'Z' ? 100 : 500;
+  Machine.jog(b.dataset.j, step, feed).catch(e => $('mstatus').textContent = String(e.message || e));
+});
+$('munlock').onclick = () => Machine.unlock().catch(e => $('mstatus').textContent = String(e.message || e));
+$('mhome').onclick = () => Machine.home().catch(e => $('mstatus').textContent = String(e.message || e));
+$('mzeroxy').onclick = () => Machine.zeroAxis('X0 Y0').catch(e => $('mstatus').textContent = String(e.message || e));
+$('mzeroz').onclick = () => Machine.zeroAxis('Z0').catch(e => $('mstatus').textContent = String(e.message || e));
+
+$('probe').onclick = async () => {
+  const bb = lastResult && isoBbox(lastResult);
+  if (!bb) { $('probestatus').textContent = 'Generate toolpaths with an isolation layer first.'; return; }
+  $('probe').disabled = true;
+  try {
+    let n = 0;
+    const lev = await Machine.probeGrid(bb[0], bb[1], bb[2], bb[3], {
+      spacing: parseFloat($('probe_spacing').value),
+      maxDepth: parseFloat($('probe_depth').value),
+      feed: parseFloat($('probe_feed').value),
+    }, (ix, iy, z, total) => { $('probestatus').textContent = `probing ${++n}/${total}: Z ${z.toFixed(3)}`; });
+    const all = lev.z.flat();
+    $('probestatus').textContent =
+      `done: ${all.length} points, surface ${Math.min(...all).toFixed(3)} to ${Math.max(...all).toFixed(3)} mm`;
+  } catch (e) {
+    $('probestatus').textContent = 'probe failed: ' + (e.message || e);
+  } finally { $('probe').disabled = false; }
+};
+
+$('mrun').onclick = () => {
+  if (!lastResult) return;
+  let code = lastResult.gcode[$('runfile').value];
+  if (!code) return;
+  if ($('use_leveling').checked) {
+    if (!Machine.leveling) { $('runstatus').textContent = 'No probe data - probe first or untick leveling.'; return; }
+    code = Machine.applyLeveling(code, Machine.leveling);
+  }
+  Machine.startStream(code);
+  $('runstatus').textContent = 'running...';
+};
+Machine.on('progress', p => {
+  $('runstatus').textContent = p.done ? `done: ${p.total} lines sent`
+    : `${p.sent}/${p.total} lines (${Math.round(100 * p.sent / p.total)}%)`;
+});
+$('mhold').onclick = () => Machine.pauseStream();
+$('mresume').onclick = () => Machine.resumeStream();
+$('mstop').onclick = () => { Machine.stopStream(); $('runstatus').textContent = 'stopped (soft reset sent)'; };
 
 $('tool_mode').onchange = () => {
   const v = $('tool_mode').value;
@@ -242,9 +368,26 @@ svg.addEventListener('pointermove', e => {
 });
 svg.addEventListener('pointerup', () => drag = null);
 
+let lastResult = null;
+
+function isoBbox(d) {
+  let minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
+  for (const line of d.isolation || []) for (const [x, y] of line) {
+    minx = Math.min(minx, x); maxx = Math.max(maxx, x);
+    miny = Math.min(miny, y); maxy = Math.max(maxy, y);
+  }
+  return minx > maxx ? null : [minx - 1, miny - 1, maxx + 1, maxy + 1];
+}
+
 function showResult(d) {
+  lastResult = d;
+  const sel = $('runfile'); sel.innerHTML = '';
+  for (const name of Object.keys(d.gcode || {})) {
+    const o = document.createElement('option'); o.value = o.textContent = name; sel.appendChild(o);
+  }
+  refreshMachineUI();
   render(d);
-  $('warnings').textContent = (d.warnings || []).map(w => 'âš  ' + w).join('\n');
+  $('warnings').textContent = (d.warnings || []).map(w => '⚠ ' + w).join('\n');
   $('stats').textContent = Object.entries(d.stats || {}).map(([k,v]) => `${k}: ${v}`).join('\n');
   const dl = $('downloads'); dl.innerHTML = '';
   for (const [name, code] of Object.entries(d.gcode || {})) {
