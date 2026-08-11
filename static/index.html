@@ -19,6 +19,9 @@
   legend { color:var(--dim); font-size:12px; padding:0 6px; text-transform:uppercase; letter-spacing:.05em; }
   label { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:6px 0; }
   label[hidden] { display:none; }
+  label[title] > span:first-child, fieldset > span[title] {
+    text-decoration: underline dotted; text-decoration-color: var(--line);
+    text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: help; }
   label span { color:var(--text); }
   input[type=number], select { width:110px; background:var(--bg); color:var(--text);
     border:1px solid var(--line); border-radius:5px; padding:4px 6px; }
@@ -220,6 +223,50 @@
 const $ = id => document.getElementById(id);
 const svg = $('svg'), world = $('world');
 let vb = null;
+
+// hover help for every parameter
+const HELP = {
+  f_copper: "Gerber of the copper layer to mill (KiCad: *-F_Cu.gbr, or *-B_Cu.gbr with Mirror on). Required for isolation milling.",
+  f_drill: "Excellon drill file (KiCad: *.drl). Enables the drilling G-code and drill spotting.",
+  f_outline: "Gerber of the board edge (KiCad: *-Edge_Cuts.gbr). Enables the cutout G-code and defines the board for rubout/voronoi.",
+  tool_mode: "End mill: fixed cutting diameter. V-bit: angled engraving tip whose effective width grows with cut depth - the width is computed for you.",
+  tool_dia: "Cutting diameter of the end mill. Determines the width of each isolation cut and how close the tool can get between features.",
+  vbit_angle: "Included angle of the V-bit, e.g. 30 or 60 degrees (printed on the bit).",
+  vbit_tip: "Width of the small flat at the very tip of the V-bit. Often 0.1-0.2 mm; check the bit's datasheet.",
+  iso_depth: "How deep to cut into the board. Copper foil is ~0.035 mm; 0.05 mm cuts through it with a little margin. Deeper widens a V-bit's cut.",
+  strategy: "Contour: offset passes hugging the copper. Voronoi: one cut down the middle of each gap - nets keep max copper, fastest. Rubout: remove ALL open copper - no floating slivers.",
+  copper_margin: "Safety buffer: grow all copper by this much before computing cuts, so traces come out this much wider per side. Warns if it closes a gap between nets.",
+  iso_passes: "Contour strategy only: number of concentric passes around the copper. More passes = wider isolation channel.",
+  iso_overlap: "How much each extra pass overlaps the previous one, as a fraction of tool diameter. 0.3 = 30% overlap, no ridges left between passes.",
+  drill_depth: "Total plunge below Z0 when drilling. Board thickness plus a little (1.6 mm board -> 2.0 mm) to fully break through.",
+  spot_drills: "Mill a small centering divot at every hole position while the isolation tool is still mounted, so the drill bit doesn't wander on the copper.",
+  spot_depth: "Depth of the spotting divot. 0.1 mm suits small drills; use 0.2-0.3 mm for a wider funnel with larger drills or a shallow V-bit.",
+  cutout_tool_dia: "Diameter of the end mill used to cut the board outline. Typically 0.8-2 mm, sturdier than the engraving tool.",
+  board_thickness: "Thickness of the PCB stock. The cutout cuts this deep plus a small overshoot to guarantee separation.",
+  cutout_pass_depth: "Depth removed per outline pass. Small tools like 0.4-0.6 mm per pass; rigid setups can go deeper.",
+  tab_count: "Number of small bridges left on the final pass so the board doesn't break loose and fly. Cut them with a knife afterwards. 0 disables tabs.",
+  tab_width: "Width of each holding tab along the outline.",
+  mirror: "Flip the board left-right for milling the BOTTOM copper layer. Origin stays at the board's lower-left as seen on the machine.",
+  safe_z: "Height above the stock for rapid moves between cuts. Must clear clamps and the probe clip.",
+  feed_xy: "Horizontal cutting speed. 100-150 mm/min is a sane start for FR4 with small tools.",
+  feed_z: "Plunge speed when entering the material. Slower than XY; small tools are fragile in plunge.",
+  rpm: "Spindle speed (S word). Small PCB tools like high RPM - use what your spindle can give.",
+  max_segment: "Long moves are split so no segment exceeds this. Needed for autoleveling to follow the board's surface curvature between probe points.",
+  probe_spacing: "Distance between probe points. The grid covers just the isolation area; 5-10 mm is typical - denser for warped boards.",
+  probe_depth: "How far below Z0 the probe is allowed to search before giving up with an error. Keep small so a forgotten probe clip does no damage.",
+  probe_feed: "Downward speed during probing. Slow = more accurate trigger point.",
+  runfile: "Which generated G-code file to stream to the machine.",
+  use_leveling: "Warp every cutting Z by the probed surface map, so the cut depth stays constant across an uneven board. Requires probing first.",
+  jogstep: "Distance per jog button press, in mm.",
+};
+for (const [id, txt] of Object.entries(HELP)) {
+  const el = $(id);
+  if (!el) continue;
+  el.title = txt;
+  const lab = el.closest('label');
+  if (lab) lab.title = txt;
+  else if (el.previousElementSibling?.tagName === 'SPAN') el.previousElementSibling.title = txt;
+}
 
 $('aboutLink').onclick = e => { e.preventDefault(); $('aboutBox').showModal(); };
 
