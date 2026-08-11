@@ -47,3 +47,4 @@ steps:
       subject: '[${CI_PIPELINE_STATUS}] ${CI_REPO} build #${CI_PIPELINE_NUMBER}'
     when:
       - status: [failure]
+        event: [push, manual]
