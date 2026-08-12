@@ -241,6 +241,7 @@
   <p style="color:var(--dim);font-size:11.5px;margin:12px 0 14px">
     License texts ship with the installed packages (<code>pip show -f &lt;name&gt;</code>)
     and in the container image under <code>/usr/local/lib/python*/site-packages</code>.</p>
+  <p id="buildinfo" style="color:var(--dim);font-size:11.5px;margin:0 0 14px"></p>
   <form method="dialog" style="text-align:right"><button style="width:auto;padding:6px 18px">Close</button></form>
 </dialog>
 
@@ -376,7 +377,13 @@ for (const [id, txt] of Object.entries(HELP)) {
   else if (el.previousElementSibling?.tagName === 'SPAN') el.previousElementSibling.title = txt;
 }
 
-$('aboutLink').onclick = e => { e.preventDefault(); $('aboutBox').showModal(); };
+$('aboutLink').onclick = e => {
+  e.preventDefault();
+  $('aboutBox').showModal();
+  fetch('/api/version').then(r => r.json())
+    .then(v => $('buildinfo').textContent = `build ${v.sha.slice(0, 7)} · ${v.date}`)
+    .catch(() => {});
+};
 
 // ---------------- machine console ----------------
 const conLines = [];

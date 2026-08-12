@@ -1,5 +1,9 @@
 FROM python:3.13-slim
 
+ARG BUILD_SHA=dev
+ARG BUILD_DATE=unknown
+ENV BUILD_SHA=$BUILD_SHA BUILD_DATE=$BUILD_DATE
+
 WORKDIR /srv
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

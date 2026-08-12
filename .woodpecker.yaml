@@ -17,6 +17,8 @@ steps:
         --dockerfile="$CI_WORKSPACE/Dockerfile"
         --destination="registry.container-registry.svc.cluster.local:5000/etchless:$CI_COMMIT_SHA"
         --destination="registry.container-registry.svc.cluster.local:5000/etchless:latest"
+        --build-arg="BUILD_SHA=$CI_COMMIT_SHA"
+        --build-arg="BUILD_DATE=$(date -u '+%Y-%m-%d %H:%M UTC')"
         --insecure
         --skip-tls-verify
     when:

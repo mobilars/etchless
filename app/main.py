@@ -19,6 +19,13 @@ def healthz():
     return {"ok": True}
 
 
+@app.get("/api/version")
+def version():
+    import os
+    return {"sha": os.environ.get("BUILD_SHA", "dev"),
+            "date": os.environ.get("BUILD_DATE", "unknown")}
+
+
 @app.post("/api/process")
 async def api_process(
     copper: UploadFile | None = File(None),
