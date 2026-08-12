@@ -10,6 +10,13 @@ const Machine = (() => {
   let statusTimer = null;
   let stream = { active: false, paused: false, abort: false, sent: 0, total: 0, inflight: [] };
   let leveling = null;           // {xs, ys, z[iy][ix], ref}
+  let opAbort = false;           // cancels multi-step operations like probing
+
+  function flushWaiters(reason) {
+    const ws = lineWaiters;
+    lineWaiters = [];
+    ws.forEach(w => { try { w("error: " + reason); } catch {} });
+  }
 
   const enc = new TextEncoder();
   const listeners = { status: [], line: [], progress: [], sent: [] };
@@ -34,6 +41,8 @@ const Machine = (() => {
   async function disconnect() {
     clearInterval(statusTimer);
     stream.abort = true;
+    opAbort = true;
+    flushWaiters("disconnected");
     try { readerAbort?.abort(); } catch {}
     try { writer?.releaseLock(); } catch {}
     try { await port?.close(); } catch {}
@@ -109,7 +118,13 @@ const Machine = (() => {
 
   const unlock = () => cmd("$X");
   const home = () => cmd("$H");
-  const softReset = async () => { stream.abort = true; lineWaiters = []; await raw("\x18"); };
+  const softReset = async () => {
+    stream.abort = true;
+    opAbort = true;
+    flushWaiters("aborted by soft reset");
+    await raw("\x18");
+  };
+  const cancelProbe = () => { opAbort = true; };
   const hold = () => raw("!");
   const resume = () => raw("~");
   const jog = (axis, dist, feed) => cmd(`$J=G91 G21 ${axis}${dist} F${feed}`);
@@ -120,6 +135,7 @@ const Machine = (() => {
   async function waitIdle(timeoutMs = 60000) {
     const t0 = Date.now();
     while (status.state !== "Idle") {
+      if (opAbort) throw new Error("canceled");
       if (Date.now() - t0 > timeoutMs) throw new Error("timeout waiting for Idle");
       await new Promise(r => setTimeout(r, 120));
     }
@@ -135,11 +151,13 @@ const Machine = (() => {
     const ys = Array.from({ length: ny }, (_, i) => miny + (maxy - miny) * i / (ny - 1));
     const z = ys.map(() => xs.map(() => 0));
 
+    opAbort = false;
     await cmd("G21 G90");
     for (let iy = 0; iy < ny; iy++) {
       // serpentine to shorten travel
       const order = iy % 2 ? [...xs.keys()].reverse() : [...xs.keys()];
       for (const ix of order) {
+        if (opAbort) throw new Error("canceled");
         await cmd(`G0 Z${safeZ.toFixed(3)}`);
         await cmd(`G0 X${xs[ix].toFixed(3)} Y${ys[iy].toFixed(3)}`);
         probeReports = [];
@@ -253,7 +271,7 @@ const Machine = (() => {
     await softReset();
   }
 
-  return { connect, disconnect, cmd, unlock, home, softReset, jog, zeroAxis,
+  return { connect, disconnect, cmd, unlock, home, softReset, cancelProbe, jog, zeroAxis,
            probeGrid, interpolate, applyLeveling, startStream, pauseStream,
            resumeStream, stopStream, on,
            get status() { return status; },

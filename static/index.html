@@ -257,7 +257,7 @@
   </div>
 </div>
 
-<script src="machine.js?v=2"></script>
+<script src="machine.js?v=3"></script>
 <script>
 const $ = id => document.getElementById(id);
 const svg = $('svg'), world = $('world');
@@ -477,10 +477,13 @@ $('mhome').onclick = () => Machine.home().catch(e => $('mstatus').textContent = 
 $('mzeroxy').onclick = () => Machine.zeroAxis('X0 Y0').catch(e => $('mstatus').textContent = String(e.message || e));
 $('mzeroz').onclick = () => Machine.zeroAxis('Z0').catch(e => $('mstatus').textContent = String(e.message || e));
 
+let probing = false;
 $('probe').onclick = async () => {
+  if (probing) { Machine.cancelProbe(); clog('*', 'probe cancel requested - stopping after current point'); return; }
   const bb = lastResult && isoBbox(lastResult);
   if (!bb) { $('probestatus').textContent = 'Generate toolpaths with an isolation layer first.'; return; }
-  $('probe').disabled = true;
+  probing = true;
+  $('probe').textContent = 'Cancel probing';
   clog('*', `probing grid over X${bb[0].toFixed(1)}..${bb[2].toFixed(1)} Y${bb[1].toFixed(1)}..${bb[3].toFixed(1)}`);
   try {
     let n = 0;
@@ -502,16 +505,26 @@ $('probe').onclick = async () => {
       clog('!', `surface reaches ${hi.toFixed(2)} mm, close to safe Z ${$('safe_z').value} - raise safe Z and regenerate!`);
   } catch (e) {
     const msg = String(e.message || e);
-    if (msg.includes('ALARM')) {
+    if (msg.includes('canceled')) {
+      $('probestatus').textContent = 'Probing canceled.';
+      clog('*', 'probing canceled');
+      Machine.cmd(`G0 Z${(parseFloat($('safe_z').value) || 2).toFixed(2)}`).catch(() => {});
+    } else if (msg.includes('ALARM')) {
       await Machine.softReset().catch(() => {});
       await new Promise(r => setTimeout(r, 1200));
       await Machine.unlock().catch(() => {});
       $('probestatus').textContent = 'Probe did not touch within max depth (' + msg + '). ' +
         'Check the probe clip and wiring, or raise max depth. Machine reset and unlocked - re-zero Z before retrying.';
+      clog('!', 'probe failed: ' + msg);
     } else {
       $('probestatus').textContent = 'probe failed: ' + msg;
+      clog('!', 'probe failed: ' + msg);
     }
-  } finally { $('probe').disabled = false; }
+  } finally {
+    probing = false;
+    $('probe').textContent = 'Probe isolation area';
+    $('probe').disabled = false;
+  }
 };
 
 $('mrun').onclick = () => {
