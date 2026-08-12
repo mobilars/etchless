@@ -33,6 +33,12 @@
   .mbtn, .jog { width:auto; padding:5px 10px; background:transparent; color:var(--text);
     border:1px solid var(--line); border-radius:6px; font-weight:500; font-size:13px; }
   .mbtn:hover, .jog:hover { border-color:var(--accent); }
+  .tabbar { display:flex; gap:6px; margin:10px 0 12px; }
+  .tabbar button { flex:1; padding:7px; background:transparent; color:var(--dim);
+    border:1px solid var(--line); border-radius:7px; font-weight:600; font-size:13px; }
+  .tabbar button.active { color:var(--accent); border-color:var(--accent); background:#e8b83a14; }
+  body.tab-cam .t-machine { display:none !important; }
+  body.tab-machine .t-cam { display:none !important; }
   .dl { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
   .dl a { flex:1; text-align:center; padding:7px 4px; border:1px solid var(--line); border-radius:6px;
           color:var(--text); text-decoration:none; font-size:13px; }
@@ -48,7 +54,7 @@
   .sw { width:14px; height:3px; border-radius:2px; display:inline-block; }
 </style>
 </head>
-<body>
+<body class="tab-cam">
 <div id="panel">
   <svg viewBox="0 0 232 40" width="232" height="40" role="img" aria-label="etchless" style="display:block;margin-bottom:2px">
     <!-- icon: copper pour with an isolated routed trace, two pads with drill holes -->
@@ -74,13 +80,18 @@
   </svg>
   <div class="sub">isolation milling &middot; drilling &middot; cutout</div>
 
-  <fieldset><legend>Files</legend>
+  <div class="tabbar">
+    <button id="tabcam" class="active">1 &middot; Toolpaths</button>
+    <button id="tabmachine">2 &middot; Machine</button>
+  </div>
+
+  <fieldset class="t-cam"><legend>Files</legend>
     <span>Copper layer (Gerber)</span><input type="file" id="f_copper">
     <span>Drill file (Excellon)</span><input type="file" id="f_drill">
     <span>Board outline (Gerber)</span><input type="file" id="f_outline">
   </fieldset>
 
-  <fieldset><legend>Presets</legend>
+  <fieldset class="t-cam"><legend>Presets</legend>
     <label><span>Load preset</span>
       <select id="preset_sel" style="width:140px"><option value="">-</option></select>
     </label>
@@ -92,7 +103,7 @@
     </div>
   </fieldset>
 
-  <fieldset><legend>Isolation tool</legend>
+  <fieldset class="t-cam"><legend>Isolation tool</legend>
     <label><span>Tool type</span>
       <select id="tool_mode"><option value="endmill">End mill</option><option value="vbit">V-bit</option></select>
     </label>
@@ -113,14 +124,14 @@
     <label><span>Pass overlap (0-1)</span><input type="number" id="iso_overlap" value="0.3" step="0.1" min="0" max="0.9"></label>
   </fieldset>
 
-  <fieldset><legend>Drilling</legend>
+  <fieldset class="t-cam"><legend>Drilling</legend>
     <label><span>Drill depth (mm)</span><input type="number" id="drill_depth" value="2.0" step="0.1"></label>
     <label><span>Spot holes during isolation</span><input type="checkbox" id="spot_drills"
       title="While the isolation tool is in the spindle, poke a small divot at every hole center so the drill bit does not wander on the copper"></label>
     <label><span>Spot depth (mm)</span><input type="number" id="spot_depth" value="0.1" step="0.05" min="0.02"></label>
   </fieldset>
 
-  <fieldset><legend>Board cutout</legend>
+  <fieldset class="t-cam"><legend>Board cutout</legend>
     <label><span>Tool dia (mm)</span><input type="number" id="cutout_tool_dia" value="1.0" step="0.1"></label>
     <label><span>Board thickness</span><input type="number" id="board_thickness" value="1.6" step="0.1"></label>
     <label><span>Depth per pass</span><input type="number" id="cutout_pass_depth" value="0.6" step="0.1"></label>
@@ -128,7 +139,7 @@
     <label><span>Tab width (mm)</span><input type="number" id="tab_width" value="2.0" step="0.5"></label>
   </fieldset>
 
-  <fieldset><legend>G-code</legend>
+  <fieldset class="t-cam"><legend>G-code</legend>
     <label><span>Mirror (bottom side)</span><input type="checkbox" id="mirror"></label>
     <label><span>Safe Z (mm)</span><input type="number" id="safe_z" value="2" step="0.5"></label>
     <label><span>Feed XY (mm/min)</span><input type="number" id="feed_xy" value="120" step="10"></label>
@@ -138,7 +149,7 @@
       title="Long moves are split into segments no longer than this, so autoleveling in your sender can warp Z"></label>
   </fieldset>
 
-  <fieldset><legend>GRBL machine</legend>
+  <fieldset class="t-machine"><legend>GRBL machine</legend>
     <button id="connect" style="background:transparent;color:var(--text);border:1px solid var(--line)">Connect (Web Serial)</button>
     <div id="mstatus" style="color:var(--dim);font-size:12.5px;margin:8px 0 4px">not connected</div>
     <div id="jogpad" style="display:none">
@@ -162,7 +173,7 @@
     </div>
   </fieldset>
 
-  <fieldset id="levelbox" style="display:none"><legend>Auto-level</legend>
+  <fieldset id="levelbox" class="t-machine" style="display:none"><legend>Auto-level</legend>
     <label><span>Grid spacing (mm)</span><input type="number" id="probe_spacing" value="7.5" step="0.5" min="2"></label>
     <label><span>Max probe depth (mm)</span><input type="number" id="probe_depth" value="2" step="0.5"></label>
     <label><span>Probe feed (mm/min)</span><input type="number" id="probe_feed" value="30" step="5"></label>
@@ -171,7 +182,7 @@
       Zero Z on the copper first (probe wire on the bit, clip on the board).</div>
   </fieldset>
 
-  <fieldset id="runbox" style="display:none"><legend>Run job</legend>
+  <fieldset id="runbox" class="t-machine" style="display:none"><legend>Run job</legend>
     <label><span>File</span>
       <select id="runfile" style="width:140px"></select>
     </label>
@@ -185,12 +196,12 @@
     <div id="runstatus" style="color:var(--dim);font-size:12.5px;margin-top:6px"></div>
   </fieldset>
 
-  <button id="go">Generate toolpaths</button>
-  <button id="sample" style="margin-top:8px;background:transparent;color:var(--dim);border:1px solid var(--line)">Try sample board</button>
-  <div class="dl" id="downloads"></div>
-  <div id="warnings"></div>
+  <button id="go" class="t-cam">Generate toolpaths</button>
+  <button id="sample" class="t-cam" style="margin-top:8px;background:transparent;color:var(--dim);border:1px solid var(--line)">Try sample board</button>
+  <div class="dl t-cam" id="downloads"></div>
+  <div class="t-cam" id="warnings"></div>
   <div id="error"></div>
-  <div id="stats"></div>
+  <div class="t-cam" id="stats"></div>
   <div style="margin-top:14px;text-align:center">
     <a href="#" id="aboutLink" style="color:var(--dim);font-size:12px">About &amp; licenses</a>
   </div>
@@ -235,6 +246,15 @@
 const $ = id => document.getElementById(id);
 const svg = $('svg'), world = $('world');
 let vb = null;
+
+// ---------------- tabs ----------------
+function setTab(t) {
+  document.body.className = 'tab-' + t;
+  $('tabcam').classList.toggle('active', t === 'cam');
+  $('tabmachine').classList.toggle('active', t === 'machine');
+}
+$('tabcam').onclick = () => setTab('cam');
+$('tabmachine').onclick = () => setTab('machine');
 
 // ---------------- presets (localStorage) ----------------
 const PRESET_FIELDS = ['tool_mode','tool_dia','vbit_angle','vbit_tip','iso_depth','strategy',
@@ -395,7 +415,16 @@ $('probe').onclick = async () => {
     $('probestatus').textContent =
       `done: ${all.length} points, surface ${Math.min(...all).toFixed(3)} to ${Math.max(...all).toFixed(3)} mm`;
   } catch (e) {
-    $('probestatus').textContent = 'probe failed: ' + (e.message || e);
+    const msg = String(e.message || e);
+    if (msg.includes('ALARM')) {
+      await Machine.softReset().catch(() => {});
+      await new Promise(r => setTimeout(r, 1200));
+      await Machine.unlock().catch(() => {});
+      $('probestatus').textContent = 'Probe did not touch within max depth (' + msg + '). ' +
+        'Check the probe clip and wiring, or raise max depth. Machine reset and unlocked - re-zero Z before retrying.';
+    } else {
+      $('probestatus').textContent = 'probe failed: ' + msg;
+    }
   } finally { $('probe').disabled = false; }
 };
 
