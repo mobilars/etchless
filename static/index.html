@@ -15,7 +15,7 @@
            border-right:1px solid var(--line); padding:16px; }
   #panel h1 { font-size:17px; margin:0 0 2px; color:var(--accent); }
   #panel .sub { color:var(--dim); font-size:12px; margin-bottom:14px; }
-  fieldset { border:1px solid var(--line); border-radius:8px; margin:0 0 12px; padding:10px 12px; }
+  fieldset { border:1px solid var(--line); border-radius:8px; margin:0 0 12px; padding:10px 12px; min-width:0; }
   legend { color:var(--dim); font-size:12px; padding:0 6px; text-transform:uppercase; letter-spacing:.05em; }
   label { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:6px 0; }
   label[hidden] { display:none; }
@@ -97,7 +97,7 @@
     </label>
     <div style="display:flex;gap:6px;margin-top:4px">
       <input type="text" id="preset_name" placeholder="preset name"
-        style="flex:1;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:4px 6px">
+        style="flex:1;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:4px 6px">
       <button class="mbtn" id="preset_save">Save</button>
       <button class="mbtn" id="preset_del">Delete</button>
     </div>
