@@ -240,6 +240,7 @@
     <div><span class="sw" style="background:var(--cut)"></span>cutout path</div>
     <div><span class="sw" style="background:var(--edge)"></span>board edge</div>
     <div><span class="sw" style="background:var(--drill)"></span>drill</div>
+    <div><span class="sw" style="background:#7dff7d"></span>machine position</div>
   </div>
 </div>
 
@@ -390,6 +391,16 @@ $('connect').onclick = async () => {
 Machine.on('status', s => {
   $('mstatus').textContent =
     `${s.state}  X${s.wpos[0].toFixed(2)} Y${s.wpos[1].toFixed(2)} Z${s.wpos[2].toFixed(3)}`;
+  const mk = document.getElementById('posmarker');
+  if (mk) {
+    if (Machine.connected) {
+      mk.setAttribute('display', '');
+      mk.setAttribute('transform', `translate(${s.wpos[0]},${s.wpos[1]})`);
+      document.getElementById('posdot').setAttribute('fill', s.wpos[2] < 0 ? '#7dff7d' : 'none');
+    } else {
+      mk.setAttribute('display', 'none');
+    }
+  }
 });
 
 document.querySelectorAll('.jog').forEach(b => b.onclick = () => {
@@ -514,6 +525,14 @@ function render(d) {
       fill: 'var(--bg)', stroke: 'var(--drill)', 'stroke-width': stroke(0.05) }));
     world.appendChild(el('circle', { cx: dr.x, cy: dr.y, r: stroke(0.06), fill: 'var(--drill)' }));
   }
+
+  // live machine-position crosshair (updated from GRBL status reports)
+  const mk = el('g', { id: 'posmarker', display: 'none' });
+  const mw = stroke(0.07);
+  mk.appendChild(el('line', { x1: -2, y1: 0, x2: 2, y2: 0, stroke: '#7dff7d', 'stroke-width': mw }));
+  mk.appendChild(el('line', { x1: 0, y1: -2, x2: 0, y2: 2, stroke: '#7dff7d', 'stroke-width': mw }));
+  mk.appendChild(el('circle', { id: 'posdot', r: 0.8, fill: 'none', stroke: '#7dff7d', 'stroke-width': mw }));
+  world.appendChild(mk);
 }
 
 // pan/zoom
