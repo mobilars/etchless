@@ -87,7 +87,23 @@ async def api_process(
         )
         return asdict(res)
     except Exception as e:
-        return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=422)
+        text = str(e)
+        which = next((label for key, label in (("copper_", "copper layer"),
+                                               ("drill_", "drill file"),
+                                               ("outline_", "board outline"))
+                      if key in text), None)
+        msg = f"Could not parse the {which}: {text}" if which else f"{type(e).__name__}: {text}"
+        if "excellon statement" in text.lower() or "gerber" in text.lower() or which:
+            uploaded = {n: Path(u.filename).name for n, u in
+                        (("copper layer", copper), ("drill file", drill), ("board outline", outline))
+                        if u is not None and u.filename}
+            bad_name = uploaded.get(which, "")
+            if bad_name.lower().endswith((".ngc", ".nc", ".gcode", ".tap")):
+                msg = (f"The {which} you uploaded ({bad_name}) looks like G-code output "
+                       f"from another CAM tool, not a CAD export. Upload what your EDA tool "
+                       f"exports instead - KiCad: *.drl for drills, *-F_Cu.gbr for copper, "
+                       f"*-Edge_Cuts.gbr for the outline.")
+        return JSONResponse({"error": msg}, status_code=422)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
