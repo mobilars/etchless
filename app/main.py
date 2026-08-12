@@ -103,4 +103,13 @@ def api_sample(strategy: str = "rubout"):
         return JSONResponse({"error": f"{type(e).__name__}: {e}"}, status_code=422)
 
 
-app.mount("/", StaticFiles(directory=str(STATIC), html=True), name="static")
+class NoCacheStaticFiles(StaticFiles):
+    """Static files with forced revalidation, so a redeploy can never leave the
+    browser mixing cached-old JS with fresh HTML."""
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/", NoCacheStaticFiles(directory=str(STATIC), html=True), name="static")

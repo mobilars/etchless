@@ -13,8 +13,8 @@ const Machine = (() => {
 
   const enc = new TextEncoder();
   const listeners = { status: [], line: [], progress: [], sent: [] };
-  const on = (ev, fn) => listeners[ev].push(fn);
-  const emit = (ev, arg) => listeners[ev].forEach(f => f(arg));
+  const on = (ev, fn) => (listeners[ev] ??= []).push(fn);
+  const emit = (ev, arg) => (listeners[ev] || []).forEach(f => f(arg));
 
   // ---------------------------------------------------------------- serial
 
