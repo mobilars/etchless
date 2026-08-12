@@ -164,6 +164,8 @@
         <button class="jog" data-j="X" data-s="1">X+</button>
         <button class="jog" data-j="Z" data-s="-1">Z-</button><span></span>
       </div>
+      <div style="color:var(--dim);font-size:11.5px;margin:2px 0 6px">
+        keyboard: arrow keys jog X/Y, PgUp/PgDn jog Z</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button class="mbtn" id="munlock">Unlock</button>
         <button class="mbtn" id="mhome">Home</button>
@@ -395,6 +397,25 @@ document.querySelectorAll('.jog').forEach(b => b.onclick = () => {
   const feed = b.dataset.j === 'Z' ? 100 : 500;
   Machine.jog(b.dataset.j, step, feed).catch(e => $('mstatus').textContent = String(e.message || e));
 });
+// keyboard jogging: arrows = X/Y, PageUp/PageDown = Z (machine tab only)
+const JOG_KEYS = { ArrowUp: ['Y', 1], ArrowDown: ['Y', -1], ArrowLeft: ['X', -1],
+                   ArrowRight: ['X', 1], PageUp: ['Z', 1], PageDown: ['Z', -1] };
+let jogBusy = false;
+document.addEventListener('keydown', e => {
+  const k = JOG_KEYS[e.key];
+  if (!k || !Machine.connected || Machine.streaming) return;
+  if (document.body.className !== 'tab-machine') return;
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  e.preventDefault();
+  if (jogBusy) return;
+  jogBusy = true;
+  const step = parseFloat($('jogstep').value) * k[1];
+  Machine.jog(k[0], step, k[0] === 'Z' ? 100 : 500)
+    .catch(err => $('mstatus').textContent = String(err.message || err))
+    .finally(() => { jogBusy = false; });
+});
+
 $('munlock').onclick = () => Machine.unlock().catch(e => $('mstatus').textContent = String(e.message || e));
 $('mhome').onclick = () => Machine.home().catch(e => $('mstatus').textContent = String(e.message || e));
 $('mzeroxy').onclick = () => Machine.zeroAxis('X0 Y0').catch(e => $('mstatus').textContent = String(e.message || e));
