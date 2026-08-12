@@ -381,6 +381,7 @@ $('aboutLink').onclick = e => { e.preventDefault(); $('aboutBox').showModal(); }
 // ---------------- machine console ----------------
 const conLines = [];
 function clog(prefix, text) {
+  console.log('[etchless]', prefix, text);   // full trace also in the browser devtools console
   conLines.push(prefix + ' ' + text);
   if (conLines.length > 400) conLines.splice(0, conLines.length - 400);
   const box = $('console');
@@ -392,7 +393,7 @@ Machine.on('sent', l => {
   if (/^M0\b/.test(l)) clog('*', 'M0 tool-change pause: machine holds after the buffer drains - change the tool, then press Resume.');
 });
 Machine.on('line', l => {
-  if (l === 'ok' && Machine.streaming) return;   // don't flood during jobs
+  if (l === 'ok' && Machine.streaming) { console.log('[etchless] <', l); return; }   // devtools only during jobs
   clog('<', l);
 });
 $('mdisend').onclick = () => {
