@@ -257,7 +257,7 @@
   </div>
 </div>
 
-<script src="machine.js?v=3"></script>
+<script src="machine.js?v=4"></script>
 <script>
 const $ = id => document.getElementById(id);
 const svg = $('svg'), world = $('world');
@@ -435,7 +435,8 @@ $('connect').onclick = async () => {
 
 Machine.on('status', s => {
   $('mstatus').textContent =
-    `${s.state}  X${s.wpos[0].toFixed(2)} Y${s.wpos[1].toFixed(2)} Z${s.wpos[2].toFixed(3)}`;
+    `${s.state}  X${s.wpos[0].toFixed(2)} Y${s.wpos[1].toFixed(2)} Z${s.wpos[2].toFixed(3)}` +
+    `  ·  probe: ${s.probeTriggered ? 'CLOSED' : 'open'}`;
   const mk = document.getElementById('posmarker');
   if (mk) {
     if (Machine.connected) {
@@ -513,8 +514,15 @@ $('probe').onclick = async () => {
       await Machine.softReset().catch(() => {});
       await new Promise(r => setTimeout(r, 1200));
       await Machine.unlock().catch(() => {});
-      $('probestatus').textContent = 'Probe did not touch within max depth (' + msg + '). ' +
-        'Check the probe clip and wiring, or raise max depth. Machine reset and unlocked - re-zero Z before retrying.';
+      if (msg.includes('ALARM:4')) {
+        $('probestatus').textContent = 'ALARM:4 - GRBL sees the probe circuit as already CLOSED ' +
+          'before probing. Watch "probe:" in the status line: it must read open at rest and CLOSED ' +
+          'when you touch clip to bit. If it is inverted, send $6=1 in the console (then STOP + Unlock). ' +
+          'If it is always CLOSED, check the wiring/pins.';
+      } else {
+        $('probestatus').textContent = 'Probe did not touch within max depth (' + msg + '). ' +
+          'Check the probe clip and wiring, or raise max depth. Machine reset and unlocked - re-zero Z before retrying.';
+      }
       clog('!', 'probe failed: ' + msg);
     } else {
       $('probestatus').textContent = 'probe failed: ' + msg;

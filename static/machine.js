@@ -95,6 +95,7 @@ const Machine = (() => {
     const wpos = s.match(/WPos:([-\d.]+),([-\d.]+),([-\d.]+)/);
     const wco = s.match(/WCO:([-\d.]+),([-\d.]+),([-\d.]+)/);
     status.state = state;
+    status.probeTriggered = /\|Pn:[^|>]*P/.test(s);
     if (wco) status.wco = wco.slice(1, 4).map(Number);
     if (mpos) {
       status.mpos = mpos.slice(1, 4).map(Number);
