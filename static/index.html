@@ -177,7 +177,7 @@
 
   <fieldset id="levelbox" class="t-machine" style="display:none"><legend>Auto-level</legend>
     <label><span>Grid spacing (mm)</span><input type="number" id="probe_spacing" value="7.5" step="0.5" min="2"></label>
-    <label><span>Max probe depth (mm)</span><input type="number" id="probe_depth" value="2" step="0.5"></label>
+    <label><span>Max probe depth (mm)</span><input type="number" id="probe_depth" value="10" step="0.5"></label>
     <label><span>Probe feed (mm/min)</span><input type="number" id="probe_feed" value="30" step="5"></label>
     <button id="probe" class="mbtn" style="width:100%">Probe isolation area</button>
     <div id="probestatus" style="color:var(--dim);font-size:12.5px;margin-top:6px">
@@ -257,7 +257,7 @@
   </div>
 </div>
 
-<script src="machine.js?v=4"></script>
+<script src="machine.js?v=5"></script>
 <script>
 const $ = id => document.getElementById(id);
 const svg = $('svg'), world = $('world');
@@ -360,7 +360,7 @@ const HELP = {
   rpm: "Spindle speed (S word). Small PCB tools like high RPM - use what your spindle can give.",
   max_segment: "Long moves are split so no segment exceeds this. Needed for autoleveling to follow the board's surface curvature between probe points.",
   probe_spacing: "Distance between probe points. The grid covers just the isolation area; 5-10 mm is typical - denser for warped boards.",
-  probe_depth: "How far below Z0 the probe is allowed to search before giving up with an error. Keep small so a forgotten probe clip does no damage.",
+  probe_depth: "How far below Z0 the probe is allowed to search before giving up with an error. Must be more than the distance from your Z0 to the copper; a forgotten probe clip drives the bit this far down, so don't make it excessive either.",
   probe_feed: "Downward speed during probing. Slow = more accurate trigger point.",
   runfile: "Which generated G-code file to stream to the machine.",
   use_leveling: "Warp every cutting Z by the probed surface map. The probe defines where the copper actually is, so cut depth stays constant even if your manual Z0 was rough. Requires probing first.",

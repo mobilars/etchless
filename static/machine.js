@@ -145,7 +145,7 @@ const Machine = (() => {
   /* Probe a grid over [minx..maxx]x[miny..maxy] (work coords).
      Returns leveling object. Z must already be zeroed on the copper at the origin. */
   async function probeGrid(minx, miny, maxx, maxy, opts, onPoint) {
-    const { spacing = 7.5, safeZ = 1.5, maxDepth = 2.0, feed = 30 } = opts || {};
+    const { spacing = 7.5, safeZ = 1.5, maxDepth = 10.0, feed = 30 } = opts || {};
     const nx = Math.max(2, Math.ceil((maxx - minx) / spacing) + 1);
     const ny = Math.max(2, Math.ceil((maxy - miny) / spacing) + 1);
     const xs = Array.from({ length: nx }, (_, i) => minx + (maxx - minx) * i / (nx - 1));
