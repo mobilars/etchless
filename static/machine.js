@@ -12,7 +12,7 @@ const Machine = (() => {
   let leveling = null;           // {xs, ys, z[iy][ix], ref}
 
   const enc = new TextEncoder();
-  const listeners = { status: [], line: [], progress: [] };
+  const listeners = { status: [], line: [], progress: [], sent: [] };
   const on = (ev, fn) => listeners[ev].push(fn);
   const emit = (ev, arg) => listeners[ev].forEach(f => f(arg));
 
@@ -100,6 +100,7 @@ const Machine = (() => {
 
   // send one line, resolve on ok/error/alarm
   function cmd(line) {
+    emit("sent", line);
     return new Promise((resolve, reject) => {
       lineWaiters.push(resp => resp === "ok" ? resolve(resp) : reject(new Error(`${line} -> ${resp}`)));
       raw(line + "\n").catch(reject);
@@ -182,7 +183,9 @@ const Machine = (() => {
     return m ? Number(m[1]) : null;
   };
 
-  /* Add the probed surface offset to every cutting move (programmed Z < 0). */
+  /* Add the probed surface height to every cutting move (programmed Z < 0).
+     The surface is used ABSOLUTELY: the probe defines where the copper is, so
+     the manual Z zero only needs to be within probe range - not exact. */
   function applyLeveling(gcode, lev) {
     let x = 0, y = 0, modalZ = 0;
     const out = [];
@@ -194,7 +197,7 @@ const Machine = (() => {
       if (gx !== null) x = gx;
       if (gy !== null) y = gy;
       if (gz !== null) modalZ = gz;
-      const dz = interpolate(lev, x, y) - lev.ref;
+      const dz = interpolate(lev, x, y);
       if (gz !== null && gz < 0) {
         out.push(rawLine.replace(/Z-?\d*\.?\d+/, "Z" + (gz + dz).toFixed(4)));
       } else if (g[1] === "1" && gz === null && modalZ < 0 && (gx !== null || gy !== null)) {
@@ -226,6 +229,7 @@ const Machine = (() => {
       if (used + line.length + 1 > RX_BUFFER) break;
       stream.inflight.push(line.length + 1);
       pumpQueue.shift();
+      emit("sent", line);
       raw(line + "\n").catch(() => { stream.abort = true; });
     }
     if (!pumpQueue.length && !stream.inflight.length) {

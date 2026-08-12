@@ -181,7 +181,9 @@
     <label><span>Probe feed (mm/min)</span><input type="number" id="probe_feed" value="30" step="5"></label>
     <button id="probe" class="mbtn" style="width:100%">Probe isolation area</button>
     <div id="probestatus" style="color:var(--dim);font-size:12.5px;margin-top:6px">
-      Zero Z on the copper first (probe wire on the bit, clip on the board).</div>
+      Get Z0 within max-probe-depth of the copper (rough is fine), attach the probe
+      wire to the bit and the clip to the copper. Probing measures the true surface;
+      leveled jobs then cut relative to it.</div>
   </fieldset>
 
   <fieldset id="runbox" class="t-machine" style="display:none"><legend>Run job</legend>
@@ -196,6 +198,16 @@
       <button class="mbtn" id="mstop" style="flex:1;color:#ff6b6b;border-color:#ff6b6b">STOP</button>
     </div>
     <div id="runstatus" style="color:var(--dim);font-size:12.5px;margin-top:6px"></div>
+  </fieldset>
+
+  <fieldset class="t-machine"><legend>Console</legend>
+    <div id="console" style="height:150px;overflow-y:auto;background:var(--bg);border:1px solid var(--line);
+      border-radius:6px;padding:6px;font:11px/1.5 Consolas,monospace;white-space:pre-wrap;color:var(--dim)"></div>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <input type="text" id="mdi" placeholder="manual G-code / $ command"
+        style="flex:1;min-width:0;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-family:Consolas,monospace">
+      <button class="mbtn" id="mdisend">Send</button>
+    </div>
   </fieldset>
 
   <button id="go" class="t-cam">Generate toolpaths</button>
@@ -350,7 +362,7 @@ const HELP = {
   probe_depth: "How far below Z0 the probe is allowed to search before giving up with an error. Keep small so a forgotten probe clip does no damage.",
   probe_feed: "Downward speed during probing. Slow = more accurate trigger point.",
   runfile: "Which generated G-code file to stream to the machine.",
-  use_leveling: "Warp every cutting Z by the probed surface map, so the cut depth stays constant across an uneven board. Requires probing first.",
+  use_leveling: "Warp every cutting Z by the probed surface map. The probe defines where the copper actually is, so cut depth stays constant even if your manual Z0 was rough. Requires probing first.",
   jogstep: "Distance per jog button press, in mm.",
   preset_sel: "Apply a saved parameter set. Presets live in this browser's local storage.",
   preset_name: "Name for saving the current parameters as a preset. With the name empty, Save overwrites the selected preset.",
@@ -365,6 +377,31 @@ for (const [id, txt] of Object.entries(HELP)) {
 }
 
 $('aboutLink').onclick = e => { e.preventDefault(); $('aboutBox').showModal(); };
+
+// ---------------- machine console ----------------
+const conLines = [];
+function clog(prefix, text) {
+  conLines.push(prefix + ' ' + text);
+  if (conLines.length > 400) conLines.splice(0, conLines.length - 400);
+  const box = $('console');
+  box.textContent = conLines.join('\n');
+  box.scrollTop = box.scrollHeight;
+}
+Machine.on('sent', l => {
+  clog('>', l);
+  if (/^M0\b/.test(l)) clog('*', 'M0 tool-change pause: machine holds after the buffer drains - change the tool, then press Resume.');
+});
+Machine.on('line', l => {
+  if (l === 'ok' && Machine.streaming) return;   // don't flood during jobs
+  clog('<', l);
+});
+$('mdisend').onclick = () => {
+  const line = $('mdi').value.trim();
+  if (!line || !Machine.connected) return;
+  $('mdi').value = '';
+  Machine.cmd(line).then(() => clog('<', 'ok')).catch(e => clog('!', String(e.message || e)));
+};
+$('mdi').addEventListener('keydown', e => { if (e.key === 'Enter') $('mdisend').onclick(); });
 
 // ---------------- GRBL machine ----------------
 function refreshMachineUI() {
@@ -382,9 +419,9 @@ if (!('serial' in navigator)) {
 
 $('connect').onclick = async () => {
   try {
-    if (Machine.connected) { await Machine.disconnect(); }
-    else { await Machine.connect(); }
-  } catch (e) { $('mstatus').textContent = String(e.message || e); }
+    if (Machine.connected) { await Machine.disconnect(); clog('*', 'disconnected'); }
+    else { await Machine.connect(); clog('*', 'connected to GRBL'); }
+  } catch (e) { $('mstatus').textContent = String(e.message || e); clog('!', String(e.message || e)); }
   refreshMachineUI();
 };
 
@@ -436,16 +473,25 @@ $('probe').onclick = async () => {
   const bb = lastResult && isoBbox(lastResult);
   if (!bb) { $('probestatus').textContent = 'Generate toolpaths with an isolation layer first.'; return; }
   $('probe').disabled = true;
+  clog('*', `probing grid over X${bb[0].toFixed(1)}..${bb[2].toFixed(1)} Y${bb[1].toFixed(1)}..${bb[3].toFixed(1)}`);
   try {
     let n = 0;
     const lev = await Machine.probeGrid(bb[0], bb[1], bb[2], bb[3], {
       spacing: parseFloat($('probe_spacing').value),
       maxDepth: parseFloat($('probe_depth').value),
       feed: parseFloat($('probe_feed').value),
-    }, (ix, iy, z, total) => { $('probestatus').textContent = `probing ${++n}/${total}: Z ${z.toFixed(3)}`; });
+    }, (ix, iy, z, total) => {
+      $('probestatus').textContent = `probing ${++n}/${total}: Z ${z.toFixed(3)}`;
+      clog('*', `probe ${n}/${total}: Z ${z.toFixed(3)}`);
+    });
     const all = lev.z.flat();
+    const lo = Math.min(...all), hi = Math.max(...all);
     $('probestatus').textContent =
-      `done: ${all.length} points, surface ${Math.min(...all).toFixed(3)} to ${Math.max(...all).toFixed(3)} mm`;
+      `done: ${all.length} points, surface ${lo.toFixed(3)} to ${hi.toFixed(3)} mm. ` +
+      `Leveling now uses this as the true copper height - your manual Z0 no longer matters.`;
+    clog('*', `probe done: ${all.length} points, surface ${lo.toFixed(3)}..${hi.toFixed(3)}`);
+    if (hi > parseFloat($('safe_z').value) - 0.5)
+      clog('!', `surface reaches ${hi.toFixed(2)} mm, close to safe Z ${$('safe_z').value} - raise safe Z and regenerate!`);
   } catch (e) {
     const msg = String(e.message || e);
     if (msg.includes('ALARM')) {
@@ -464,20 +510,23 @@ $('mrun').onclick = () => {
   if (!lastResult) return;
   let code = lastResult.gcode[$('runfile').value];
   if (!code) return;
-  if ($('use_leveling').checked) {
+  const leveled = $('use_leveling').checked;
+  if (leveled) {
     if (!Machine.leveling) { $('runstatus').textContent = 'No probe data - probe first or untick leveling.'; return; }
     code = Machine.applyLeveling(code, Machine.leveling);
   }
+  clog('*', `job start: ${$('runfile').value}.nc, ${code.split('\n').length} lines, leveling ${leveled ? 'ON' : 'OFF'}`);
   Machine.startStream(code);
   $('runstatus').textContent = 'running...';
 };
 Machine.on('progress', p => {
   $('runstatus').textContent = p.done ? `done: ${p.total} lines sent`
     : `${p.sent}/${p.total} lines (${Math.round(100 * p.sent / p.total)}%)`;
+  if (p.done) clog('*', 'job finished');
 });
-$('mhold').onclick = () => Machine.pauseStream();
-$('mresume').onclick = () => Machine.resumeStream();
-$('mstop').onclick = () => { Machine.stopStream(); $('runstatus').textContent = 'stopped (soft reset sent)'; };
+$('mhold').onclick = () => { Machine.pauseStream(); clog('*', 'feed hold'); };
+$('mresume').onclick = () => { Machine.resumeStream(); clog('*', 'resume'); };
+$('mstop').onclick = () => { Machine.stopStream(); $('runstatus').textContent = 'stopped (soft reset sent)'; clog('!', 'STOP: job aborted, soft reset sent'); };
 
 $('tool_mode').onchange = () => {
   const v = $('tool_mode').value;
