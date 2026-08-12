@@ -150,6 +150,13 @@
   </fieldset>
 
   <fieldset class="t-machine"><legend>GRBL machine</legend>
+    <ol style="color:var(--dim);font-size:12px;margin:0 0 10px;padding-left:18px;line-height:1.7">
+      <li>Connect, unlock if needed</li>
+      <li>Jog to the board's <b>lower-left corner</b> &rarr; <b>Zero XY</b></li>
+      <li>Touch the bit to the copper &rarr; <b>Zero Z</b> (rough is fine)</li>
+      <li>Attach probe, check <b>probe:</b> reads open &rarr; <b>Probe</b></li>
+      <li>Remove probe clip &rarr; <b>Run</b> with leveling on</li>
+    </ol>
     <button id="connect" style="background:transparent;color:var(--text);border:1px solid var(--line)">Connect (Web Serial)</button>
     <div id="mstatus" style="color:var(--dim);font-size:12.5px;margin:8px 0 4px">not connected</div>
     <div id="jogpad" style="display:none">
@@ -483,6 +490,15 @@ $('probe').onclick = async () => {
   if (probing) { Machine.cancelProbe(); clog('*', 'probe cancel requested - stopping after current point'); return; }
   const bb = lastResult && isoBbox(lastResult);
   if (!bb) { $('probestatus').textContent = 'Generate toolpaths with an isolation layer first.'; return; }
+  const w = Machine.status.wpos;
+  if (!confirm(
+      `Probe will sweep X ${bb[0].toFixed(1)}..${bb[2].toFixed(1)}, Y ${bb[1].toFixed(1)}..${bb[3].toFixed(1)} ` +
+      `relative to the CURRENT work zero.\n\n` +
+      `Machine now reads X${w[0].toFixed(2)} Y${w[1].toFixed(2)} Z${w[2].toFixed(2)} - ` +
+      `GRBL remembers the zero from previous sessions, so if you have not zeroed XY at the board's ` +
+      `lower-left corner and Z on the copper THIS session, cancel and zero first.\n\nStart probing?`)) {
+    return;
+  }
   probing = true;
   $('probe').textContent = 'Cancel probing';
   clog('*', `probing grid over X${bb[0].toFixed(1)}..${bb[2].toFixed(1)} Y${bb[1].toFixed(1)}..${bb[3].toFixed(1)}`);
